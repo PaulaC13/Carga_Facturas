@@ -160,6 +160,9 @@
       <label>Proveedor</label>
       <input type="text" id="fProveedor" list="proveedoresList" placeholder="Nombre del proveedor" oninput="mostrarMetodoAcordado()">
       <div id="metodoHint" class="sub" style="margin-top:4px;"></div>
+
+      <label>RUT del proveedor</label>
+      <input type="text" id="fRut" placeholder="000000000000">
       <datalist id="proveedoresList"></datalist>
 
       <div class="row2">
@@ -239,11 +242,56 @@ const PROVEEDORES = ["*OM - Carrau Mendez Paz Luis Agustin", "ABEL RODRIGUEZ - R
 // (ej: proveedor de contado pero factura de fin de mes pagada al mes siguiente = crédito).
 const METODO_ACORDADO = {"Distriblanco SAS": "CREDITO MES VENCIDO", "Fantasia": "CONTADO", "VARELA HNOS. SA": "CREDITO MES VENCIDO", "Bemaor S.A": "CREDITO MES VENCIDO", "Soldo Hnos": "CREDITO MES VENCIDO", "La Sanitaria SA": "mes en curso", "Kali SA": "CREDITO MES VENCIDO", "Dumasa": "CREDITO MES VENCIDO", "ANCAL SA": "CREDITO MES VENCIDO", "Tilsen SA": "CREDITO MES VENCIDO", "S. A. LA GALLEGA": "CREDITO MES VENCIDO", "DALENE SA": "CREDITO MES VENCIDO", "Redplan S.A.": "CREDITO MES VENCIDO", "SAFY S.A.": "CREDITO MES VENCIDO", "GRUPO TEXSUR SRL": "CREDITO MES VENCIDO", "MARIANA LAURA FRUGONI NODAR": "CREDITO MES VENCIDO", "LABON SRL": "CREDITO MES VENCIDO", "Livelux SA": "mes en curso", "Ariel guillermo Musto": "CREDITO MES VENCIDO", "BIRLENO SA": "CREDITO MES VENCIDO", "ECOLAB SRL": "CREDITO MES VENCIDO", "Agroland SA": "CREDITO MES VENCIDO", "LANYVEL": "CREDITO MES VENCIDO", "Glensud SA": "CREDITO MES VENCIDO", "GROUPLAND SA": "CREDITO MES VENCIDO", "Alambique SA": "CREDITO MES VENCIDO", "Sebastián Llanes Ríos": "CREDITO MES VENCIDO", "WINESELECT SRL": "CREDITO MES VENCIDO", "SAFIMAR LTDA": "CREDITO MES VENCIDO", "IPL LTDA": "CREDITO MES VENCIDO", "GRAND CRU SA": "CREDITO MES VENCIDO", "ARROYOS AZULES S.A.": "CREDITO MES VENCIDO", "LUMIFORE SA": "30 DIAS FECHA FACTURA", "ACAMAR SA": "CREDITO MES VENCIDO", "Tecnicor s.a.": "30 dias", "Madebar sa": "CREDITO MES VENCIDO", "Susana Maria Folchi Patriarca": "CREDITO MES VENCIDO", "GADATIL SA": "CREDITO MES VENCIDO", "TEBALSUR SA": "CREDITO MES VENCIDO", "FINESA TRADING SA": "CREDITO MES VENCIDO", "TAKODA S.A.": "CREDITO MES VENCIDO", "BOIGUE S. A.": "CREDITO QUINCENAL", "VIÑA EDÉN S.A.": "CREDITO MES VENCIDO", "RIBILDAN S.A": "CREDITO MES VENCIDO", "Gonzalo Montaño Paullier": "CREDITO MES VENCIDO", "Reverdecer Este SRL": "CREDITO MES VENCIDO", "LANSIDE SRL": "CREDITO MES VENCIDO", "Pablo Escayola y Julio Delgado": "CREDITO MES VENCIDO", "FRAMBEL URUGUAY SAS": "CREDITO MES VENCIDO", "Juan Ramón Correa Campagne": "CREDITO MES VENCIDO", "Sommeliers Sas": "CREDITO MES VENCIDO", "Tomás Magariños SAS": "CREDITO MES VENCIDO", "Ferval productos naturales sas": "CREDITO MES VENCIDO", "CALDERTEK SAS": "CREDITO MES VENCIDO", "Pura palta Sas": "CREDITO MES VENCIDO", "Entre Frutas SAS": "CREDITO MES VENCIDO", "MIMVE sas": "CREDITO MES VENCIDO"};
 
+function normalizarNombre(s){
+  return (s||'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\b(S A|SA|SAS|SRL|S R L|LTDA)\b/g,'').replace(/\s+/g,' ').trim();
+}
+
+function distanciaLevenshtein(a, b){
+  const m = a.length, n = b.length;
+  const d = Array.from({length: m+1}, (_, i) => [i, ...Array(n).fill(0)]);
+  for(let j=0;j<=n;j++) d[0][j] = j;
+  for(let i=1;i<=m;i++){
+    for(let j=1;j<=n;j++){
+      d[i][j] = Math.min(
+        d[i-1][j] + 1,
+        d[i][j-1] + 1,
+        d[i-1][j-1] + (a[i-1]===b[j-1] ? 0 : 1)
+      );
+    }
+  }
+  return d[m][n];
+}
+
+const PROVEEDORES_NORM = PROVEEDORES.map(p => ({ original: p, norm: normalizarNombre(p) }));
+
 function mostrarMetodoAcordado(){
-  const nombre = document.getElementById('fProveedor').value.trim();
+  const nombreCrudo = document.getElementById('fProveedor').value.trim();
   const hint = document.getElementById('metodoHint');
-  const metodo = METODO_ACORDADO[nombre];
-  hint.textContent = metodo ? `Método habitual de este proveedor: ${metodo} (revisá si corresponde según la fecha real de pago)` : '';
+  const metodo = METODO_ACORDADO[nombreCrudo];
+  const hintMetodo = metodo ? `Método habitual de este proveedor: ${metodo} (revisá si corresponde según la fecha real de pago). ` : '';
+
+  hint.innerHTML = '';
+  let hintTexto = hintMetodo;
+
+  if(nombreCrudo.length >= 3){
+    const norm = normalizarNombre(nombreCrudo);
+    const existe = PROVEEDORES_NORM.some(p => p.norm === norm);
+    if(!existe){
+      let mejor = null, mejorDist = Infinity;
+      for(const p of PROVEEDORES_NORM){
+        const dist = distanciaLevenshtein(norm, p.norm);
+        if(dist < mejorDist){ mejorDist = dist; mejor = p; }
+      }
+      const umbral = Math.max(2, Math.floor(norm.length * 0.3));
+      if(mejor && mejorDist <= umbral){
+        hint.innerHTML = `${hintTexto}<span style="color:var(--warn-ink); font-weight:600;">⚠️ No está exacto en la base — ¿quisiste decir "${escapeHtml(mejor.original)}"?</span> <button type="button" style="border:none;background:none;color:var(--forest);text-decoration:underline;cursor:pointer;font-size:12.5px;" onclick="document.getElementById('fProveedor').value='${mejor.original.replace(/'/g,"\\'")}'; mostrarMetodoAcordado();">Usar este</button>`;
+        return;
+      } else {
+        hintTexto += `⚠️ Este proveedor no está en la base de 550 — revisá que el nombre esté bien escrito.`;
+      }
+    }
+  }
+  hint.innerHTML = hintTexto;
 }
 
 const dl = document.getElementById('proveedoresList');
@@ -386,12 +434,13 @@ async function leerFactura(base64, mediaType){
   const prompt = `Esta imagen es una factura uruguaya (e-Factura o factura común). Extraé estos datos y respondé SOLO con un objeto JSON, sin texto adicional, sin backticks de markdown:
 {
   "proveedor": "razón social del EMISOR de la factura tal cual figura impresa",
+  "rut": "RUT del EMISOR (11 dígitos, con o sin puntos, tal cual figura impreso)",
   "numero_factura": "número de factura, solo dígitos si es posible",
   "fecha": "fecha de emisión en formato AAAA-MM-DD",
   "moneda": "UYU o USD",
   "importe_total": numero decimal del monto total de la factura, sin símbolo de moneda ni separador de miles
 }
-Si algún dato no es legible, poné null en ese campo.`;
+Si algún dato no es legible, poné null en ese campo. Si el nombre del proveedor aparece tachado o hay dos nombres (razón social y nombre de fantasía), priorizá la razón social asociada al RUT, no el nombre comercial.`;
 
   const apiKey = getApiKey();
   if(!apiKey) throw new Error('Falta configurar la clave de API de Gemini.');
@@ -418,6 +467,7 @@ Si algún dato no es legible, poné null en ese campo.`;
 function llenarFormulario(data){
   document.getElementById('fProveedor').value = data.proveedor || '';
   mostrarMetodoAcordado();
+  document.getElementById('fRut').value = data.rut || '';
   document.getElementById('fNumero').value = data.numero_factura || '';
   document.getElementById('fFecha').value = data.fecha || '';
   document.getElementById('fMoneda').value = (data.moneda === 'USD') ? 'USD' : 'UYU';
@@ -453,6 +503,7 @@ async function guardarFactura(){
     id,
     origen,
     proveedor,
+    rut: document.getElementById('fRut').value.trim(),
     numero: document.getElementById('fNumero').value.trim(),
     fecha: document.getElementById('fFecha').value,
     moneda: document.getElementById('fMoneda').value,
@@ -546,8 +597,8 @@ async function descargarCSV(){
   const filtro = document.getElementById('filtroOrigen').value;
   if(filtro) regs = regs.filter(r=>r.origen===filtro);
 
-  const headers = ['Origen','Fecha','Proveedor','N° factura','Moneda','Importe','Sector','Metodo de pago','Comentario'];
-  const rows = regs.map(r=>[r.origen, r.fecha, r.proveedor, r.numero, r.moneda, r.importe, r.sector, r.metodo, r.comentario]);
+  const headers = ['Origen','Fecha','Proveedor','RUT','N° factura','Moneda','Importe','Sector','Metodo de pago','Comentario'];
+  const rows = regs.map(r=>[r.origen, r.fecha, r.proveedor, r.rut, r.numero, r.moneda, r.importe, r.sector, r.metodo, r.comentario]);
   let csv = '\uFEFF' + headers.join(';') + '\n';
   csv += rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n');
 
