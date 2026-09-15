@@ -445,7 +445,7 @@ Si algún dato no es legible, poné null en ese campo. Si el nombre del proveedo
   const apiKey = getApiKey();
   if(!apiKey) throw new Error('Falta configurar la clave de API de Gemini.');
 
-  const MODELOS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
+  const MODELOS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite'];
   const errores = [];
 
   for(const modelo of MODELOS){
