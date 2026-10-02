@@ -99,6 +99,15 @@
   .origen-tag{font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:20px;}
   .origen-despensa{background:#e7f0e6; color:#2f5c39;}
   .origen-hotel{background:#e6eef2; color:#2c5a70;}
+  .linkbtn{border:none; background:none; color:var(--forest); text-decoration:underline; cursor:pointer; font-size:13px; padding:6px 0; font-family:inherit;}
+  .desg-fila{display:grid; grid-template-columns:1fr 96px 62px 28px; gap:6px; margin-top:8px; align-items:center;}
+  .desg-fila select, .desg-fila input{padding:9px 8px; font-size:14px;}
+  .desg-fila .d-del{border:1px solid var(--line); background:#fff; border-radius:8px; height:38px; cursor:pointer; color:var(--clay); font-weight:700;}
+  .desg-acciones{display:flex; gap:16px; flex-wrap:wrap; margin-top:4px;}
+  .desg-resumen{font-size:13px; padding:9px 11px; border-radius:9px; margin-top:8px;}
+  .desg-resumen.ok{background:var(--ok-bg); color:var(--ok-ink);}
+  .desg-resumen.warn{background:var(--warn-bg); color:var(--warn-ink);}
+  .rubro-mini{font-size:11px; color:var(--muted); margin-top:2px;}
   .del{color:var(--clay); cursor:pointer; font-size:12px; font-weight:600; background:none; border:none; padding:0;}
   .empty{text-align:center; color:var(--muted); padding:30px 10px; font-size:13.5px;}
   .toolbar{display:flex; gap:8px; margin-bottom:14px;}
@@ -189,6 +198,21 @@
           <label>Importe</label>
           <input type="number" step="0.01" id="fImporte" placeholder="0.00">
         </div>
+      </div>
+
+      <label>Rubro del P&amp;L</label>
+      <div id="rubroSimple">
+        <select id="fRubro" disabled><option value="">Elegí primero Despensa u Hotel</option></select>
+        <button type="button" class="linkbtn" onclick="activarDesglose(true)">➕ Repartir en varios rubros</button>
+      </div>
+      <div id="rubroDesglose" style="display:none;">
+        <div class="desg-fila" style="margin-top:2px; font-size:11px; color:var(--muted); font-weight:600;"><span>Rubro</span><span>Importe</span><span>%</span><span></span></div>
+        <div id="desgloseFilas"></div>
+        <div class="desg-acciones">
+          <button type="button" class="linkbtn" onclick="agregarFilaDesglose()">+ Agregar rubro</button>
+          <button type="button" class="linkbtn" onclick="activarDesglose(false)">Volver a un solo rubro</button>
+        </div>
+        <div id="desgloseResumen" class="desg-resumen"></div>
       </div>
 
       <label>Sector</label>
@@ -347,14 +371,166 @@ function guardarConfig(){
   toggleConfig();
   alert('Configuración guardada en este dispositivo.');
   cargarProveedores();
+  cargarRubros();
 }
 
 function getApiKey(){ return localStorage.getItem('gemini_api_key') || ''; }
 function getScriptUrl(){ return localStorage.getItem('script_url') || ''; }
 
+// ===================== RUBROS DEL P&L / DESGLOSE =====================
+// Lista de respaldo (la lista real se lee de la pestaña "Rubros P&L" de la planilla)
+let RUBROS = {"DESPENSA": ["101 - Desayuno", "102 - Bebidas con alcohol", "103 - Bebidas sin alcohol", "104 - Verdulería", "105 - Carniceria", "106 - Pescaderia", "107 - Productos Despensa", "108 - Secos", "109 - Otros", "201 - Tarjeta  de credito", "202 - Equipamiento", "203 - Mantenimiento", "204 - Miscelaneos y descartables", "205 - BSE", "206 - Comida Personal", "207 - Sistemas", "208 - Gastos Bancarios y administrativos", "209 - Gerenciamiento", "301 - Gas", "302 - Luz", "303 - Agua", "403 - Vivienda y viaticos"], "HOTEL": ["101 - Lavanderia", "102 - Amenidades", "103 - Productos de limpieza", "104 - TV por cable", "105 - Internet & telefonia", "106 - Papelería y librería", "107 - Desayuno", "108 - Comisiones agencias", "109 - Reposicion equipamiento", "110 - Gastos sobre otros ingresos", "201 - Contribución inmobiliaria", "202 - Impuesto a las primarias", "203 - Otros impuestos", "204 - Impuesto al patrimonio", "205 - Gas", "206 - Luz", "207 - Agua", "301 - Mantenimiento", "302 - Seguridad", "303 - Marketing", "304 - Gastos Bancarios y administrativos", "305 - Comision de tarjetas de credito", "306 - Comida de personal", "307 - Seguros", "308 - Fumigación / Emergencia medica", "309 - Honorarios contables  y legales", "310 - Miscelaneos", "311 - Gerenciamiento", "312 - Soporte sistemas", "403 - Vivienda y viaticos", "501 - Gastos Extraordinarios", "503 - Pool Bar", "504 - Beach club 1", "507 - Beach club 2", "508 - DGI - IRAE"]};
+let modoDesglose = false;
+
+function origenActual(){
+  const p = document.querySelector('#formCard .pill.selected');
+  return p ? p.dataset.val : null;
+}
+function totalFactura(){ return parseFloat(document.getElementById('fImporte').value) || 0; }
+function fmtMonto(n){ return Number(n||0).toLocaleString('es-UY',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function opcionesRubro(seleccionado){
+  const o = origenActual();
+  const lista = (o && RUBROS[o]) || [];
+  return `<option value="">${o ? 'Elegí rubro...' : 'Elegí primero Despensa u Hotel'}</option>` +
+    lista.map(r=>`<option value="${escapeHtml(r)}"${r===seleccionado?' selected':''}>${escapeHtml(r)}</option>`).join('');
+}
+
+function refrescarRubros(){
+  const sel = document.getElementById('fRubro');
+  const previo = sel.value;
+  sel.innerHTML = opcionesRubro(previo);
+  sel.disabled = !origenActual();
+  document.querySelectorAll('#desgloseFilas .d-rubro').forEach(s=>{ const v = s.value; s.innerHTML = opcionesRubro(v); });
+  actualizarResumen();
+}
+
+function mostrarModo(){
+  document.getElementById('rubroSimple').style.display = modoDesglose ? 'none' : 'block';
+  document.getElementById('rubroDesglose').style.display = modoDesglose ? 'block' : 'none';
+}
+
+function activarDesglose(on){
+  if(on && !origenActual()){ alert('Elegí primero el origen: Despensa u Hotel.'); return; }
+  modoDesglose = on;
+  const filas = document.getElementById('desgloseFilas');
+  filas.innerHTML = '';
+  if(on){
+    const primero = document.getElementById('fRubro').value;
+    agregarFilaDesglose(primero, totalFactura() || '');
+    agregarFilaDesglose();
+  }
+  mostrarModo();
+  actualizarResumen();
+}
+
+function agregarFilaDesglose(rubro, importe){
+  const div = document.createElement('div');
+  div.className = 'desg-fila';
+  div.innerHTML = `<select class="d-rubro">${opcionesRubro(rubro||'')}</select>
+    <input type="number" step="0.01" class="d-imp" placeholder="$">
+    <input type="number" step="0.01" class="d-pct" placeholder="%">
+    <button type="button" class="d-del" title="Quitar">✕</button>`;
+  const imp = div.querySelector('.d-imp'), pct = div.querySelector('.d-pct');
+  if(importe){ imp.value = (Math.round(importe*100)/100).toFixed(2); }
+  imp.addEventListener('input', ()=>{
+    const t = totalFactura();
+    pct.value = (t && imp.value) ? (Math.round(parseFloat(imp.value)/t*10000)/100) : '';
+    actualizarResumen();
+  });
+  pct.addEventListener('input', ()=>{
+    const t = totalFactura();
+    imp.value = (t && pct.value) ? (Math.round(t*parseFloat(pct.value))/100).toFixed(2) : '';
+    actualizarResumen();
+  });
+  div.querySelector('.d-rubro').addEventListener('change', actualizarResumen);
+  div.querySelector('.d-del').addEventListener('click', ()=>{ div.remove(); actualizarResumen(); });
+  document.getElementById('desgloseFilas').appendChild(div);
+  if(importe) imp.dispatchEvent(new Event('input'));
+  actualizarResumen();
+}
+
+function sumaDesglose(){
+  let s = 0;
+  document.querySelectorAll('#desgloseFilas .d-imp').forEach(i=>{ s += parseFloat(i.value)||0; });
+  return Math.round(s*100)/100;
+}
+
+function actualizarResumen(){
+  const box = document.getElementById('desgloseResumen');
+  if(!modoDesglose){ box.innerHTML=''; return; }
+  const t = totalFactura(), s = sumaDesglose(), falta = Math.round((t - s)*100)/100;
+  if(!t){ box.className='desg-resumen warn'; box.textContent='Completá primero el importe total de la factura.'; return; }
+  if(Math.abs(falta) < 0.01){
+    box.className = 'desg-resumen ok';
+    box.textContent = `✓ Repartido el total: ${fmtMonto(t)}`;
+  } else if(falta > 0){
+    box.className = 'desg-resumen warn';
+    box.innerHTML = `Asignado ${fmtMonto(s)} de ${fmtMonto(t)} · <b>Falta ${fmtMonto(falta)}</b> <button type="button" class="linkbtn" onclick="completarResto()">Poner el resto en la última línea</button>`;
+  } else {
+    box.className = 'desg-resumen warn';
+    box.innerHTML = `Asignado ${fmtMonto(s)} de ${fmtMonto(t)} · <b>Te pasaste por ${fmtMonto(-falta)}</b>`;
+  }
+}
+
+function completarResto(){
+  const imps = [...document.querySelectorAll('#desgloseFilas .d-imp')];
+  if(!imps.length) return;
+  const falta = Math.round((totalFactura() - sumaDesglose())*100)/100;
+  const ultima = imps.find(i=>!i.value) || imps[imps.length-1];
+  ultima.value = ((parseFloat(ultima.value)||0) + falta).toFixed(2);
+  ultima.dispatchEvent(new Event('input'));
+}
+
+// Devuelve {items:[{rubro, importe}]} o {error:'...'}
+function obtenerDesglose(){
+  const t = totalFactura();
+  if(!modoDesglose){
+    const rubro = document.getElementById('fRubro').value;
+    if(!rubro) return { error: 'Elegí el rubro del P&L (o repartilo en varios rubros).' };
+    return { items: [{ rubro, importe: t }] };
+  }
+  const filas = [...document.querySelectorAll('#desgloseFilas .desg-fila')];
+  const items = [];
+  for(const f of filas){
+    const rubro = f.querySelector('.d-rubro').value;
+    const importe = parseFloat(f.querySelector('.d-imp').value) || 0;
+    if(!rubro && !importe) continue;               // línea vacía: la ignoro
+    if(!rubro) return { error: 'Hay una línea del desglose sin rubro.' };
+    if(importe <= 0) return { error: `Falta el importe de "${rubro}".` };
+    if(items.some(x=>x.rubro===rubro)) return { error: `El rubro "${rubro}" está repetido: juntalo en una sola línea.` };
+    items.push({ rubro, importe: Math.round(importe*100)/100 });
+  }
+  if(items.length === 0) return { error: 'Completá el desglose por rubro.' };
+  const s = Math.round(items.reduce((a,x)=>a+x.importe,0)*100)/100;
+  if(Math.abs(s - t) >= 0.01) return { error: `El desglose suma ${fmtMonto(s)} y la factura es de ${fmtMonto(t)}. Tienen que coincidir.` };
+  return { items };
+}
+
+async function cargarRubros(){
+  const scriptUrl = getScriptUrl();
+  if(!scriptUrl) return;
+  try{
+    const resp = await fetch(scriptUrl + '?accion=rubros');
+    const result = await resp.json();
+    if(result.ok && result.rubros && Object.keys(result.rubros).length){
+      RUBROS = result.rubros;
+      refrescarRubros();
+    }
+  }catch(err){
+    console.warn('No se pudo leer la lista de rubros, uso la de respaldo.', err);
+  }
+}
+
+document.getElementById('fImporte').addEventListener('input', ()=>{
+  document.querySelectorAll('#desgloseFilas .d-imp').forEach(i=>{ if(i.value) i.dispatchEvent(new Event('input')); });
+  actualizarResumen();
+});
+
 cargarConfigGuardada();
 if(!getApiKey() || !getScriptUrl()){ document.getElementById('configCard').style.display = 'block'; }
 cargarProveedores();
+cargarRubros();
 
 async function abrirCamara(){
   const wrap = document.getElementById('camaraWrap');
@@ -407,6 +583,12 @@ function showTab(t){
 function selectPill(el, group){
   el.parentElement.querySelectorAll('.pill').forEach(p=>p.classList.remove('selected'));
   el.classList.add('selected');
+  if(group === 'origen'){
+    // cambia la lista de rubros (Despensa / Hotel): reinicio la elección
+    document.getElementById('fRubro').value = '';
+    if(modoDesglose) activarDesglose(true);
+    refrescarRubros();
+  }
 }
 
 document.getElementById('fileInput').addEventListener('change', async (e)=>{
@@ -516,6 +698,10 @@ function llenarFormulario(data){
   document.getElementById('fSector').value = '';
   document.getElementById('fComentario').value = '';
   document.querySelectorAll('#formCard .pill').forEach(p=>p.classList.remove('selected'));
+  modoDesglose = false;
+  document.getElementById('desgloseFilas').innerHTML = '';
+  mostrarModo();
+  refrescarRubros();
 }
 
 function resetForm(){
@@ -535,6 +721,8 @@ async function guardarFactura(){
   if(!origen){ alert('Elegí el origen: Despensa u Hotel.'); return; }
   if(!proveedor){ alert('Falta el proveedor.'); return; }
   if(!importe){ alert('Falta el importe.'); return; }
+  const desglose = obtenerDesglose();
+  if(desglose.error){ alert(desglose.error); return; }
 
   const btn = document.getElementById('btnGuardar');
   btn.disabled = true; btn.textContent = 'Guardando...';
@@ -552,6 +740,7 @@ async function guardarFactura(){
     sector: document.getElementById('fSector').value.trim(),
     metodo: document.getElementById('fMetodo').value,
     comentario: document.getElementById('fComentario').value.trim(),
+    desglose: desglose.items,
     foto: currentPhotoBase64 || null,
     creado: new Date().toISOString()
   };
@@ -613,7 +802,7 @@ async function renderLista(){
     <tr>
       <td>${r.fecha || '—'}</td>
       <td><span class="origen-tag ${r.origen==='HOTEL'?'origen-hotel':'origen-despensa'}">${r.origen}</span></td>
-      <td>${escapeHtml(r.proveedor)}</td>
+      <td>${escapeHtml(r.proveedor)}${r.rubro ? `<div class="rubro-mini">${escapeHtml(r.rubro)}</div>` : ''}</td>
       <td>${escapeHtml(r.numero||'—')}</td>
       <td class="num">${r.moneda} ${Number(r.importe).toLocaleString('es-UY',{minimumFractionDigits:2})}</td>
       <td>${escapeHtml(r.metodo||'—')}</td>
@@ -641,8 +830,8 @@ async function descargarCSV(){
   const filtro = document.getElementById('filtroOrigen').value;
   if(filtro) regs = regs.filter(r=>r.origen===filtro);
 
-  const headers = ['Origen','Fecha','Proveedor','RUT','N° factura','Moneda','Importe','Sector','Metodo de pago','Comentario'];
-  const rows = regs.map(r=>[r.origen, r.fecha, r.proveedor, r.rut, r.numero, r.moneda, r.importe, r.sector, r.metodo, r.comentario]);
+  const headers = ['Origen','Fecha','Proveedor','RUT','N° factura','Moneda','Importe','Sector','Metodo de pago','Comentario','Rubro P&L'];
+  const rows = regs.map(r=>[r.origen, r.fecha, r.proveedor, r.rut, r.numero, r.moneda, r.importe, r.sector, r.metodo, r.comentario, r.rubro]);
   let csv = '\uFEFF' + headers.join(';') + '\n';
   csv += rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n');
 
