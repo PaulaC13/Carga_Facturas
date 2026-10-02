@@ -99,6 +99,7 @@
   .origen-tag{font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:20px;}
   .origen-despensa{background:#e7f0e6; color:#2f5c39;}
   .origen-hotel{background:#e6eef2; color:#2c5a70;}
+  .origen-beachclub{background:#fbf0d9; color:#7a5a12;}
   .linkbtn{border:none; background:none; color:var(--forest); text-decoration:underline; cursor:pointer; font-size:13px; padding:6px 0; font-family:inherit;}
   .desg-fila{display:grid; grid-template-columns:1fr 96px 62px 28px; gap:6px; margin-top:8px; align-items:center;}
   .desg-fila select, .desg-fila input{padding:9px 8px; font-size:14px;}
@@ -165,6 +166,7 @@
       <div class="pillrow">
         <div class="pill" data-val="DESPENSA" onclick="selectPill(this,'origen')">Despensa</div>
         <div class="pill" data-val="HOTEL" onclick="selectPill(this,'origen')">Hotel</div>
+        <div class="pill" data-val="BEACHCLUB" onclick="selectPill(this,'origen')">BeachClub</div>
       </div>
 
       <label>Proveedor</label>
@@ -202,7 +204,7 @@
 
       <label>Rubro del P&amp;L</label>
       <div id="rubroSimple">
-        <select id="fRubro" disabled><option value="">Elegí primero Despensa u Hotel</option></select>
+        <select id="fRubro" disabled><option value="">Elegí primero Despensa, Hotel o BeachClub</option></select>
         <button type="button" class="linkbtn" onclick="activarDesglose(true)">➕ Repartir en varios rubros</button>
       </div>
       <div id="rubroDesglose" style="display:none;">
@@ -243,6 +245,7 @@
         <option value="">Todos los orígenes</option>
         <option value="DESPENSA">Despensa</option>
         <option value="HOTEL">Hotel</option>
+        <option value="BEACHCLUB">BeachClub</option>
       </select>
       <button class="btn btn-secondary" style="margin:0; width:auto; padding:9px 14px; font-size:13px;" onclick="descargarCSV()">Descargar CSV</button>
     </div>
@@ -379,7 +382,7 @@ function getScriptUrl(){ return localStorage.getItem('script_url') || ''; }
 
 // ===================== RUBROS DEL P&L / DESGLOSE =====================
 // Lista de respaldo (la lista real se lee de la pestaña "Rubros P&L" de la planilla)
-let RUBROS = {"DESPENSA": ["101 - Desayuno", "102 - Bebidas con alcohol", "103 - Bebidas sin alcohol", "104 - Verdulería", "105 - Carniceria", "106 - Pescaderia", "107 - Productos Despensa", "108 - Secos", "109 - Otros", "201 - Tarjeta  de credito", "202 - Equipamiento", "203 - Mantenimiento", "204 - Miscelaneos y descartables", "205 - BSE", "206 - Comida Personal", "207 - Sistemas", "208 - Gastos Bancarios y administrativos", "209 - Gerenciamiento", "301 - Gas", "302 - Luz", "303 - Agua", "403 - Vivienda y viaticos"], "HOTEL": ["101 - Lavanderia", "102 - Amenidades", "103 - Productos de limpieza", "104 - TV por cable", "105 - Internet & telefonia", "106 - Papelería y librería", "107 - Desayuno", "108 - Comisiones agencias", "109 - Reposicion equipamiento", "110 - Gastos sobre otros ingresos", "201 - Contribución inmobiliaria", "202 - Impuesto a las primarias", "203 - Otros impuestos", "204 - Impuesto al patrimonio", "205 - Gas", "206 - Luz", "207 - Agua", "301 - Mantenimiento", "302 - Seguridad", "303 - Marketing", "304 - Gastos Bancarios y administrativos", "305 - Comision de tarjetas de credito", "306 - Comida de personal", "307 - Seguros", "308 - Fumigación / Emergencia medica", "309 - Honorarios contables  y legales", "310 - Miscelaneos", "311 - Gerenciamiento", "312 - Soporte sistemas", "403 - Vivienda y viaticos", "501 - Gastos Extraordinarios", "503 - Pool Bar", "504 - Beach club 1", "507 - Beach club 2", "508 - DGI - IRAE"]};
+let RUBROS = {"DESPENSA": ["101 - Desayuno", "102 - Bebidas con alcohol", "103 - Bebidas sin alcohol", "104 - Verdulería", "105 - Carniceria", "106 - Pescaderia", "107 - Productos Despensa", "108 - Secos", "109 - Otros", "201 - Tarjeta  de credito", "202 - Equipamiento", "203 - Mantenimiento", "204 - Miscelaneos y descartables", "205 - BSE", "206 - Comida Personal", "207 - Sistemas", "208 - Gastos Bancarios y administrativos", "209 - Gerenciamiento", "301 - Gas", "302 - Luz", "303 - Agua", "403 - Vivienda y viaticos"], "HOTEL": ["101 - Lavanderia", "102 - Amenidades", "103 - Productos de limpieza", "104 - TV por cable", "105 - Internet & telefonia", "106 - Papelería y librería", "107 - Desayuno", "108 - Comisiones agencias", "109 - Reposicion equipamiento", "110 - Gastos sobre otros ingresos", "201 - Contribución inmobiliaria", "202 - Impuesto a las primarias", "203 - Otros impuestos", "204 - Impuesto al patrimonio", "205 - Gas", "206 - Luz", "207 - Agua", "301 - Mantenimiento", "302 - Seguridad", "303 - Marketing", "304 - Gastos Bancarios y administrativos", "305 - Comision de tarjetas de credito", "306 - Comida de personal", "307 - Seguros", "308 - Fumigación / Emergencia medica", "309 - Honorarios contables  y legales", "310 - Miscelaneos", "311 - Gerenciamiento", "312 - Soporte sistemas", "403 - Vivienda y viaticos", "501 - Gastos Extraordinarios", "503 - Pool Bar", "508 - DGI - IRAE"], "BEACHCLUB": ["504 - Beach club 1"]};
 let modoDesglose = false;
 
 function origenActual(){
@@ -392,7 +395,7 @@ function fmtMonto(n){ return Number(n||0).toLocaleString('es-UY',{minimumFractio
 function opcionesRubro(seleccionado){
   const o = origenActual();
   const lista = (o && RUBROS[o]) || [];
-  return `<option value="">${o ? 'Elegí rubro...' : 'Elegí primero Despensa u Hotel'}</option>` +
+  return `<option value="">${o ? 'Elegí rubro...' : 'Elegí primero Despensa, Hotel o BeachClub'}</option>` +
     lista.map(r=>`<option value="${escapeHtml(r)}"${r===seleccionado?' selected':''}>${escapeHtml(r)}</option>`).join('');
 }
 
@@ -401,6 +404,9 @@ function refrescarRubros(){
   const previo = sel.value;
   sel.innerHTML = opcionesRubro(previo);
   sel.disabled = !origenActual();
+  const lista = (origenActual() && RUBROS[origenActual()]) || [];
+  if(lista.length === 1) sel.value = lista[0];   // ej. BeachClub: un solo rubro, queda elegido solo
+  document.querySelector('#rubroSimple .linkbtn').style.display = lista.length > 1 ? '' : 'none';
   document.querySelectorAll('#desgloseFilas .d-rubro').forEach(s=>{ const v = s.value; s.innerHTML = opcionesRubro(v); });
   actualizarResumen();
 }
@@ -411,7 +417,7 @@ function mostrarModo(){
 }
 
 function activarDesglose(on){
-  if(on && !origenActual()){ alert('Elegí primero el origen: Despensa u Hotel.'); return; }
+  if(on && !origenActual()){ alert('Elegí primero el origen: Despensa, Hotel o BeachClub.'); return; }
   modoDesglose = on;
   const filas = document.getElementById('desgloseFilas');
   filas.innerHTML = '';
@@ -584,7 +590,7 @@ function selectPill(el, group){
   el.parentElement.querySelectorAll('.pill').forEach(p=>p.classList.remove('selected'));
   el.classList.add('selected');
   if(group === 'origen'){
-    // cambia la lista de rubros (Despensa / Hotel): reinicio la elección
+    // cambia la lista de rubros (Despensa / Hotel / BeachClub): reinicio la elección
     document.getElementById('fRubro').value = '';
     if(modoDesglose) activarDesglose(true);
     refrescarRubros();
@@ -718,7 +724,7 @@ async function guardarFactura(){
   const proveedor = document.getElementById('fProveedor').value.trim();
   const importe = document.getElementById('fImporte').value;
 
-  if(!origen){ alert('Elegí el origen: Despensa u Hotel.'); return; }
+  if(!origen){ alert('Elegí el origen: Despensa, Hotel o BeachClub.'); return; }
   if(!proveedor){ alert('Falta el proveedor.'); return; }
   if(!importe){ alert('Falta el importe.'); return; }
   const desglose = obtenerDesglose();
@@ -801,7 +807,7 @@ async function renderLista(){
   tbody.innerHTML = regs.map(r=>`
     <tr>
       <td>${r.fecha || '—'}</td>
-      <td><span class="origen-tag ${r.origen==='HOTEL'?'origen-hotel':'origen-despensa'}">${r.origen}</span></td>
+      <td><span class="origen-tag ${r.origen==='HOTEL'?'origen-hotel':(r.origen==='BEACHCLUB'?'origen-beachclub':'origen-despensa')}">${r.origen}</span></td>
       <td>${escapeHtml(r.proveedor)}${r.rubro ? `<div class="rubro-mini">${escapeHtml(r.rubro)}</div>` : ''}</td>
       <td>${escapeHtml(r.numero||'—')}</td>
       <td class="num">${r.moneda} ${Number(r.importe).toLocaleString('es-UY',{minimumFractionDigits:2})}</td>
